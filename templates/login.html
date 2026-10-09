@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login | ExpenseFlow</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="auth-card">
+        <div class="brand">Expense<span>Flow</span></div>
+        <h1>Welcome back</h1>
+        <p class="muted">Log in to manage your money.</p>
+
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+            <div class="notice">{{ message }}</div>
+        {% endfor %}
+
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <label>Email address</label>
+            <input type="email" name="email" placeholder="you@example.com"
+                   maxlength="255" autocomplete="email" required>
+
+            <label>Password</label>
+            <input type="password" name="password"
+                   autocomplete="current-password" required>
+
+            <button type="submit">Log in</button>
+        </form>
+
+        <p class="muted center">
+            Don't have an account?
+            <a href="{{ url_for('register') }}">Create account</a>
+        </p>
+    </main>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ExpenseFlow | Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">Expense<span>Flow</span></div>
+        <form method="POST" action="{{ url_for('logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="secondary" type="submit">Log out</button>
+        </form>
+    </header>
+
+    <main class="dashboard">
+        <h1>Financial Overview</h1>
+        <p class="muted">Welcome back, {{ current_user.username }}!</p>
+
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+            <div class="notice">{{ message }}</div>
+        {% endfor %}
+
+        <section class="summary-grid">
+            <article class="stat-card">
+                <p>Total Income</p>
+                <h2>₹{{ "%.2f"|format(income) }}</h2>
+            </article>
+            <article class="stat-card">
+                <p>Total Expenses</p>
+                <h2>₹{{ "%.2f"|format(expenses) }}</h2>
+            </article>
+            <article class="stat-card">
+                <p>Available Balance</p>
+                <h2>₹{{ "%.2f"|format(balance) }}</h2>
+            </article>
+        </section>
+
+        <section class="summary-grid">
+            <article class="panel">
+                <h2>Income vs Expenses</h2>
+                <canvas id="monthlyChart"></canvas>
+            </article>
+            <article class="panel">
+                <h2>Spending by Category</h2>
+                <canvas id="categoryChart"></canvas>
+                <p id="noCategories" class="muted" hidden>
+                    No expenses recorded this month.
+                </p>
+            </article>
+        </section>
+
+        <section class="panel">
+            <h2>Add a Transaction</h2>
+            <form method="POST" action="{{ url_for('add_transaction') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <label>Type</label>
+                <select name="kind" required>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                </select>
+
+                <label>Amount (₹)</label>
+                <input type="number" name="amount" min="0.01"
+                       max="9999999999.99" step="0.01" required>
+
+                <label>Category</label>
+                <select name="category" required>
+                    <option value="Salary">Salary</option>
+                    <option value="Freelance">Freelance</option>
+                    <option value="Business">Business</option>
+                    <option value="Food">Food</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Transport">Transport</option>
+                    <option value="Bills">Bills</option>
+                    <option value="Education">Education</option>
+                    <option value="Health">Health</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Rent">Rent</option>
+                    <option value="Other">Other</option>
+                </select>
+
+                <label>Date</label>
+                <input type="date" name="date" required>
+
+                <label>Description (optional)</label>
+                <input type="text" name="description" maxlength="200"
+                       placeholder="e.g. Monthly salary">
+
+                <button type="submit">Save Transaction</button>
+            </form>
+        </section>
+
+        <section class="panel">
+            <h2>Recent Transactions</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Category</th>
+                            <th>Description</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in transactions %}
+                        <tr>
+                            <td>{{ t.date.strftime('%d %b %Y') }}</td>
+                            <td>{{ t.category }}</td>
+                            <td>{{ t.description or '—' }}</td>
+                            <td>{{ t.kind|title }}</td>
+                            <td class="{{ 'positive' if t.kind == 'income' else 'negative' }}">
+                                {{ '+' if t.kind == 'income' else '-' }}₹{{ "%.2f"|format(t.amount) }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5">No transactions yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        async function loadAnalytics() {
+            try {
+                const response = await fetch("/api/analytics");
+
+                if (!response.ok) {
+                    throw new Error("Could not load analytics");
+                }
+
+                const data = await response.json();
+
+                const months = data.monthly.map(item => item.month);
+
+                new Chart(document.getElementById("monthlyChart"), {
+                    type: "bar",
+                    data: {
+                        labels: months,
+                        datasets: [
+                            {
+                                label: "Income (₹)",
+                                data: data.monthly.map(item => item.income),
+                                backgroundColor: "#34d399"
+                            },
+                            {
+                                label: "Expenses (₹)",
+                                data: data.monthly.map(item => item.expenses),
+                                backgroundColor: "#fb7185"
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: { color: "#f1f5f9" }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: "#94a3b8" },
+                                grid: { color: "#273449" }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: "#94a3b8" },
+                                grid: { color: "#273449" }
+                            }
+                        }
+                    }
+                });
+
+                const categories = data.categories;
+                document.getElementById("noCategories").hidden =
+                    categories.length > 0;
+
+                if (categories.length > 0) {
+                    new Chart(document.getElementById("categoryChart"), {
+                        type: "doughnut",
+                        data: {
+                            labels: categories.map(item => item.category),
+                            datasets: [{
+                                data: categories.map(item => item.amount),
+                                backgroundColor: [
+                                    "#8b5cf6", "#34d399", "#fb7185",
+                                    "#60a5fa", "#fbbf24", "#22d3ee",
+                                    "#f472b6", "#a3e635"
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: {
+                                    position: "bottom",
+                                    labels: { color: "#f1f5f9" }
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error("Analytics error:", error);
+            }
+        }
+
+        loadAnalytics();
+    </script>
+</body>
+</html>
